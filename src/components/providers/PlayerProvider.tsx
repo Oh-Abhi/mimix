@@ -17,6 +17,13 @@ interface PlayerContextType {
   maximize: () => void
   toggleFullscreen: () => void
   closePlayer: () => void
+  // Shuffle / Repeat
+  shuffle: boolean
+  toggleShuffle: () => void
+  repeat: 'off' | 'all' | 'one'
+  cycleRepeat: () => void
+  // Queue
+  queue: Song[]
 }
 
 const Ctx = createContext<PlayerContextType | null>(null)
@@ -34,9 +41,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const songRef = useRef<Song | null>(null)
-  // "Active queue" for Play Collection / Play All — controls what skipNext/skipPrev navigate
+  // "Active queue" for Play Collection / Play All
   const queueRef = useRef<Song[]>([])
   const volumeRef = useRef(0.85)
+  // Shuffle & Repeat
+  const [shuffle, setShuffleSt] = useState(false)
+  const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off')
+  const shuffleRef = useRef(false)
+  const repeatRef = useRef<'off' | 'all' | 'one'>('off')
+  const [queueState, setQueueState] = useState<Song[]>([])
 
   useEffect(() => {
     if (document.getElementById('yt-api-script')) return
@@ -69,11 +82,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (cur >= clipEnd - 1.5) {
         clearPoll()
         try { p.stopVideo() } catch {}
-        // Auto-advance through queue
         const queue = queueRef.current
         const idx = queue.findIndex(s => s.id === songRef.current?.id)
-        if (idx >= 0 && idx < queue.length - 1) {
+        const rep = repeatRef.current
+        if (rep === 'one') {
+          // Replay same song
+          playSongInner(queue[idx])
+        } else if (idx >= 0 && idx < queue.length - 1) {
           playSongInner(queue[idx + 1])
+        } else if (rep === 'all' && queue.length > 0) {
+          playSongInner(queue[0])
         }
       }
     }, 250)
@@ -111,6 +129,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const doPlay = () => {
       if (!window.YT?.Player) { setTimeout(doPlay, 350); return }
+
+      // Reuse existing player (much faster than destroying + recreating)
+      if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
+        try {
+          playerRef.current.loadVideoById({ videoId: song.youtubeId, startSeconds: song.clipStart })
+          playerRef.current.setVolume(volumeRef.current * 100)
+          startPoll(song.clipStart, song.clipEnd)
+          return
+        } catch {
+          // fall through to full recreate if reuse fails
+        }
+      }
+
+      // First song or player dead — create fresh
       destroyPlayer()
       ensureContainer()
       playerRef.current = new window.YT.Player('yt-player', {
@@ -142,10 +174,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [songs, playSongInner])
 
   // Play a specific ordered/shuffled list
-  const playSongList = useCallback((list: Song[], shuffle = false) => {
+  const playSongList = useCallback((list: Song[], sh = false) => {
     if (!list.length) return
-    const queue = shuffle ? [...list].sort(() => Math.random() - 0.5) : [...list]
+    const queue = (sh || shuffleRef.current) ? [...list].sort(() => Math.random() - 0.5) : [...list]
     queueRef.current = queue
+    setQueueState(queue)
     playSongInner(queue[0])
   }, [playSongInner])
 
@@ -175,6 +208,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const skipNext = useCallback(() => {
     const queue = queueRef.current.length ? queueRef.current : songs
     const idx = queue.findIndex(s => s.id === songRef.current?.id)
+    const rep = repeatRef.current
+    if (rep === 'one') { playSongInner(queue[idx]); return }
     const next = queue[(idx + 1) % queue.length]
     if (next) playSongInner(next)
   }, [songs, playSongInner])
@@ -192,9 +227,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const closePlayer = useCallback(() => {
     destroyPlayer()
     queueRef.current = []
+    setQueueState([])
     songRef.current = null
     setState({ currentSong: null, isPlaying: false, progress: 0, duration: 0, volume: volumeRef.current, minimized: false, fullscreen: false })
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const toggleShuffle = useCallback(() => {
+    const next = !shuffleRef.current
+    shuffleRef.current = next
+    setShuffleSt(next)
+    if (next && queueRef.current.length > 1) {
+      const cur = songRef.current
+      const shuffled = [...queueRef.current].sort(() => Math.random() - 0.5)
+      queueRef.current = shuffled
+      setQueueState(shuffled)
+      // Bring current song to front
+      if (cur) {
+        const idx = shuffled.findIndex(s => s.id === cur.id)
+        if (idx > 0) { shuffled.splice(idx, 1); shuffled.unshift(cur); queueRef.current = shuffled; setQueueState(shuffled) }
+      }
+    }
+  }, [])
+
+  const cycleRepeat = useCallback(() => {
+    const order: ('off' | 'all' | 'one')[] = ['off', 'all', 'one']
+    const next = order[(order.indexOf(repeatRef.current) + 1) % 3]
+    repeatRef.current = next
+    setRepeat(next)
   }, [])
 
   useEffect(() => {
@@ -214,7 +274,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => { destroyPlayer() }, [])
 
   return (
-    <Ctx.Provider value={{ state, songs, setSongs, playSong, playSongList, togglePlay, seekTo, setVolume, skipNext, skipPrev, minimize, maximize, toggleFullscreen, closePlayer }}>
+    <Ctx.Provider value={{ state, songs, setSongs, playSong, playSongList, togglePlay, seekTo, setVolume, skipNext, skipPrev, minimize, maximize, toggleFullscreen, closePlayer, shuffle, toggleShuffle, repeat, cycleRepeat, queue: queueState }}>
       {children}
     </Ctx.Provider>
   )

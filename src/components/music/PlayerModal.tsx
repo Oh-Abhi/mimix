@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { useEffect, useCallback } from 'react'
 import { usePlayer } from '@/components/providers/PlayerProvider'
 import { getSongGradient, gradientStyle } from '@/lib/songGradients'
-import { X, SkipBack, SkipForward, Volume2, Minimize2, Maximize2 } from 'lucide-react'
+import { X, SkipBack, SkipForward, Volume2, Minimize2, Maximize2, Shuffle, Repeat, Repeat1 } from 'lucide-react'
 import AddToCollectionButton from '@/components/social/AddToCollectionButton'
 
 function fmt(s: number) {
@@ -48,7 +48,7 @@ function Controls({ isPlaying, onToggle, onPrev, onNext, size = 'md' }: {
 }
 
 export default function PlayerModal() {
-  const { state, togglePlay, seekTo, setVolume, skipNext, skipPrev, minimize, closePlayer, toggleFullscreen } = usePlayer()
+  const { state, togglePlay, seekTo, setVolume, skipNext, skipPrev, minimize, closePlayer, toggleFullscreen, shuffle, toggleShuffle, repeat, cycleRepeat, queue } = usePlayer()
   const { currentSong: song, isPlaying, progress, duration, volume, minimized, fullscreen } = state
 
   const elapsed = duration * progress
@@ -149,8 +149,23 @@ export default function PlayerModal() {
               </div>
             </div>
 
-            {/* Controls */}
-            <Controls isPlaying={isPlaying} onToggle={togglePlay} onPrev={skipPrev} onNext={skipNext} size="lg" />
+            {/* Shuffle / Repeat row */}
+            <div className="flex items-center justify-center gap-6">
+              <motion.button onClick={toggleShuffle} whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                className="relative" title={shuffle ? 'Shuffle on' : 'Shuffle off'}>
+                <Shuffle size={18} style={{ color: shuffle ? 'var(--accent)' : 'rgba(255,255,255,0.35)' }} />
+                {shuffle && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: 'var(--accent)' }} />}
+              </motion.button>
+              <Controls isPlaying={isPlaying} onToggle={togglePlay} onPrev={skipPrev} onNext={skipNext} size="lg" />
+              <motion.button onClick={cycleRepeat} whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
+                className="relative" title={`Repeat: ${repeat}`}>
+                {repeat === 'one'
+                  ? <Repeat1 size={18} style={{ color: 'var(--accent)' }} />
+                  : <Repeat size={18} style={{ color: repeat === 'all' ? 'var(--accent)' : 'rgba(255,255,255,0.35)' }} />
+                }
+                {repeat !== 'off' && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: 'var(--accent)' }} />}
+              </motion.button>
+            </div>
 
             {/* Volume */}
             <div className="flex items-center gap-3 max-w-xs mx-auto">
@@ -161,10 +176,37 @@ export default function PlayerModal() {
                 style={{ accentColor: 'var(--accent)' }} />
             </div>
 
-            {/* Add to Collection — Spotify style */}
-            <div className="flex justify-center">
+            {/* Add to Collection + Queue panel */}
+            <div className="flex items-center justify-between">
               <AddToCollectionButton songId={song.id} variant="pill" accentColor="var(--accent)" />
+              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                {queue.length > 1 && `${queue.findIndex(s => s.id === song.id) + 1} / ${queue.length}`}
+              </div>
             </div>
+
+            {/* Up Next queue */}
+            {queue.length > 1 && (() => {
+              const idx = queue.findIndex(s => s.id === song.id)
+              const upcoming = queue.slice(idx + 1, idx + 4)
+              if (!upcoming.length) return null
+              return (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'rgba(255,255,255,0.3)' }}>Up Next</p>
+                  <div className="space-y-1">
+                    {upcoming.map((s, i) => (
+                      <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                        style={{ background: 'rgba(255,255,255,0.04)' }}>
+                        <span className="text-[10px] w-4 text-center" style={{ color: 'rgba(255,255,255,0.25)' }}>{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.7)' }}>{s.title}</p>
+                          <p className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.artist}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </motion.div>
       </AnimatePresence>

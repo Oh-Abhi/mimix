@@ -2,11 +2,11 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { usePlayer } from '@/components/providers/PlayerProvider'
-import { Maximize2, X, SkipForward } from 'lucide-react'
+import { Maximize2, X, SkipForward, Shuffle } from 'lucide-react'
 import AddToCollectionButton from '@/components/social/AddToCollectionButton'
 
 export default function MiniPlayer() {
-  const { state, maximize, closePlayer, togglePlay, skipNext } = usePlayer()
+  const { state, maximize, closePlayer, togglePlay, skipNext, toggleShuffle, shuffle } = usePlayer()
   const { currentSong, isPlaying, progress, minimized } = state
 
   return (
@@ -76,34 +76,32 @@ export default function MiniPlayer() {
             </motion.button>
 
             {/* Skip */}
-            <motion.button
-              onClick={e => { e.stopPropagation(); skipNext() }}
-              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-              style={{ color: 'var(--text-muted)' }}
-            >
+            <motion.button onClick={e => { e.stopPropagation(); skipNext() }}
+              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} style={{ color: 'var(--text-muted)' }}>
               <SkipForward size={14} strokeWidth={2} />
             </motion.button>
 
-            {/* Add to collection — Spotify style */}
+            {/* Shuffle */}
+            <motion.button onClick={e => { e.stopPropagation(); toggleShuffle() }}
+              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} title={shuffle ? 'Shuffle on' : 'Shuffle off'}
+              style={{ color: shuffle ? 'var(--accent)' : 'rgba(255,255,255,0.35)' }}>
+              <Shuffle size={12} strokeWidth={2} />
+            </motion.button>
+
+            {/* Add to collection */}
             <div onClick={e => e.stopPropagation()}>
               <AddToCollectionButton songId={currentSong.id} variant="icon" />
             </div>
 
             {/* Maximize */}
-            <motion.button
-              onClick={e => { e.stopPropagation(); maximize() }}
-              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-              style={{ color: 'var(--text-muted)' }}
-            >
+            <motion.button onClick={e => { e.stopPropagation(); maximize() }}
+              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} style={{ color: 'var(--text-muted)' }}>
               <Maximize2 size={13} strokeWidth={2} />
             </motion.button>
 
             {/* Close */}
-            <motion.button
-              onClick={e => { e.stopPropagation(); closePlayer() }}
-              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }}
-              style={{ color: 'var(--text-muted)' }}
-            >
+            <motion.button onClick={e => { e.stopPropagation(); closePlayer() }}
+              whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} style={{ color: 'var(--text-muted)' }}>
               <X size={13} strokeWidth={2} />
             </motion.button>
           </div>

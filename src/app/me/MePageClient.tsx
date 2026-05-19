@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { getMySongs, getUserCollections, addDbSong, createCollection, addSongToCollection, removeSongFromCollection, deleteDbSong, deleteCollection, updateCollection } from '@/lib/db'
@@ -9,7 +9,7 @@ import SongCard from '@/components/music/SongCard'
 import YouTubeClipPicker from '@/components/music/YouTubeClipPicker'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle, ListMusic, Check, MoreVertical, Pencil, Trash2, Tag, X } from 'lucide-react'
+import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle, ListMusic, Check, MoreVertical, Pencil, Trash2, Tag, X, LayoutGrid, List, ArrowUpDown, Shuffle } from 'lucide-react'
 
 type Tab = 'songs' | 'collections'
 interface YTResult { id: string; title: string; channel: string; thumbnail: string }
@@ -390,6 +390,12 @@ export default function MePageClient() {
   const [editingCollection, setEditingCollection] = useState<DbCollection | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [playerSongs, setPlayerSongsLocal] = useState(songs.map(dbSongToSong))
+  const [songSearch, setSongSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'artist' | 'tag'>('recent')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // Undo-delete toast
+  const [deleteToast, setDeleteToast] = useState<{ label: string; onUndo: () => void } | null>(null)
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const openAddSong = (col?: DbCollection) => {
     setPreselectedCollection(col ?? null)
@@ -446,15 +452,37 @@ export default function MePageClient() {
     setTimeout(() => load(), 1000)
   }, [load])
 
-  // Delete song
-  const handleDeleteSong = useCallback(async (songId: string) => {
+  // Delete song — instant removal with 5s undo window
+  const handleDeleteSong = useCallback((songId: string) => {
+    const song = songs.find(s => s.id === songId)
+    if (!song) return
+    // Optimistic UI
     setSongs(prev => {
       const updated = prev.filter(s => s.id !== songId)
       setPlayerSongs(updated.map(dbSongToSong))
       return updated
     })
-    try { await deleteDbSong(songId) } catch { load() }
-  }, [deleteDbSong, setPlayerSongs, load])
+    // Clear any pending timer
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+    // Undo window
+    let undone = false
+    setDeleteToast({
+      label: `"${song.title}" removed`,
+      onUndo: () => {
+        undone = true
+        if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+        setSongs(prev => [song, ...prev].sort((a, b) =>
+          songs.indexOf(a) - songs.indexOf(b)
+        ))
+        setDeleteToast(null)
+      }
+    })
+    deleteTimerRef.current = setTimeout(async () => {
+      if (!undone) { try { await deleteDbSong(songId) } catch { load() } }
+      setDeleteToast(null)
+    }, 5000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songs, setPlayerSongs, load])
 
   // Delete collection
   const handleDeleteCollection = useCallback(async (colId: string) => {
@@ -597,12 +625,71 @@ export default function MePageClient() {
               </motion.button>
             </div>
           ) : (() => {
-            // Unique tags
             const allTags = [...new Set(songs.map(s => s.emotional_tag).filter(Boolean))]
-            const filtered = tagFilter ? songs.filter(s => s.emotional_tag === tagFilter) : songs
-            const filteredSongs = filtered.map(dbSongToSong)
+            let filtered = tagFilter ? songs.filter(s => s.emotional_tag === tagFilter) : songs
+            if (songSearch.trim()) {
+              const q = songSearch.toLowerCase()
+              filtered = filtered.filter(s => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q))
+            }
+            const sorted = [...filtered].sort((a, b) => {
+              if (sortBy === 'name') return a.title.localeCompare(b.title)
+              if (sortBy === 'artist') return a.artist.localeCompare(b.artist)
+              if (sortBy === 'tag') return (a.emotional_tag ?? '').localeCompare(b.emotional_tag ?? '')
+              return 0 // recent = natural DB order
+            })
+            const filteredSongs = sorted.map(dbSongToSong)
             return (
               <div>
+                {/* Search + Sort + View toolbar */}
+                <div className="flex items-center gap-3 mb-5 flex-wrap">
+                  {/* Search */}
+                  <div className="flex-1 relative min-w-44">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                    <input value={songSearch} onChange={e => setSongSearch(e.target.value)}
+                      placeholder="Search songs..."
+                      className="w-full pl-8 pr-3 py-2 rounded-xl text-sm outline-none"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                    {songSearch && (
+                      <button onClick={() => setSongSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {/* Sort */}
+                  <div className="relative">
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                      className="pl-7 pr-3 py-2 rounded-xl text-xs appearance-none outline-none cursor-pointer"
+                      style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                      <option value="recent">Recently added</option>
+                      <option value="name">Name A–Z</option>
+                      <option value="artist">Artist A–Z</option>
+                      <option value="tag">By mood</option>
+                    </select>
+                    <ArrowUpDown size={11} className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
+                  </div>
+                  {/* Shuffle All */}
+                  <motion.button onClick={() => playSongList(filteredSongs, true)}
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                    title="Shuffle play all">
+                    <Shuffle size={12} /> Shuffle
+                  </motion.button>
+                  {/* View toggle */}
+                  <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                    <button onClick={() => setViewMode('grid')}
+                      className="w-8 h-8 flex items-center justify-center"
+                      style={{ background: viewMode === 'grid' ? 'var(--accent)' : 'var(--surface)' }}>
+                      <LayoutGrid size={12} color={viewMode === 'grid' ? 'white' : 'var(--text-muted)'} />
+                    </button>
+                    <button onClick={() => setViewMode('list')}
+                      className="w-8 h-8 flex items-center justify-center"
+                      style={{ background: viewMode === 'list' ? 'var(--accent)' : 'var(--surface)' }}>
+                      <List size={12} color={viewMode === 'list' ? 'white' : 'var(--text-muted)'} />
+                    </button>
+                  </div>
+                </div>
+
                 {/* Tag filter pills */}
                 {allTags.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap mb-5">
@@ -621,21 +708,65 @@ export default function MePageClient() {
                     ))}
                   </div>
                 )}
-                <div className="masonry-grid">
-                  {filteredSongs.map((song, i) => (
-                    <div key={song.id} className="relative group">
-                      <SongCard song={song} index={i} view="grid"
-                        onClick={() => { playSong(song); setPlayerSongs(filteredSongs) }} />
-                      {/* Delete button — appears on hover */}
-                      <button onClick={e => { e.stopPropagation(); if (confirm('Delete this song?')) handleDeleteSong(song.id) }}
-                        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        style={{ background: 'rgba(239,68,68,0.8)', backdropFilter: 'blur(8px)' }}
-                        title="Delete song">
-                        <Trash2 size={12} color="white" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+
+                {/* Results count */}
+                {(songSearch || tagFilter) && (
+                  <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                    {filteredSongs.length} {filteredSongs.length === 1 ? 'song' : 'songs'} found
+                  </p>
+                )}
+
+                {filteredSongs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No songs match your search</p>
+                    <button onClick={() => { setSongSearch(''); setTagFilter(null) }}
+                      className="mt-2 text-xs underline" style={{ color: 'var(--accent)' }}>Clear filters</button>
+                  </div>
+                ) : viewMode === 'grid' ? (
+                  <div className="masonry-grid">
+                    {filteredSongs.map((song, i) => (
+                      <div key={song.id} className="relative group">
+                        <SongCard song={song} index={i} view="grid"
+                          onClick={() => { playSong(song); setPlayerSongs(filteredSongs) }} />
+                        <button onClick={e => { e.stopPropagation(); if (confirm('Delete this song?')) handleDeleteSong(song.id) }}
+                          className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          style={{ background: 'rgba(239,68,68,0.8)', backdropFilter: 'blur(8px)' }} title="Delete song">
+                          <Trash2 size={12} color="white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredSongs.map((song, i) => (
+                      <div key={song.id} className="flex items-center gap-3 px-4 py-3 rounded-xl group cursor-pointer transition-all hover:bg-white/5"
+                        onClick={() => { playSong(song); setPlayerSongs(filteredSongs) }}
+                        style={{ border: '1px solid transparent' }}>
+                        <span className="text-xs w-5 text-right flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{i + 1}</span>
+                        <img src={song.coverUrl || `https://img.youtube.com/vi/${song.youtubeId}/mqdefault.jpg`}
+                          alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{song.title}</p>
+                          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{song.artist}</p>
+                        </div>
+                        {song.emotionalTag && (
+                          <span className="hidden sm:block text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
+                            style={{ background: 'rgba(124,58,237,0.2)', color: '#a78bfa' }}>
+                            {song.emotionalTag}
+                          </span>
+                        )}
+                        <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                          {Math.floor((song.clipEnd - song.clipStart) / 60)}:{String(Math.floor((song.clipEnd - song.clipStart) % 60)).padStart(2, '0')}
+                        </span>
+                        <button onClick={e => { e.stopPropagation(); if (confirm('Delete this song?')) handleDeleteSong(song.id) }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          style={{ color: '#f87171' }} title="Delete">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })()
@@ -757,6 +888,23 @@ export default function MePageClient() {
           onSave={async (updates) => { await handleUpdateCollection(editingCollection.id, updates); setEditingCollection(null) }}
           onClose={() => setEditingCollection(null)}
         />
+      )}
+
+      {/* Undo-delete toast */}
+      {deleteToast && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl text-sm"
+          style={{ background: 'rgba(20,16,40,0.95)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+          <span style={{ color: 'rgba(255,255,255,0.7)' }}>{deleteToast.label}</span>
+          <button onClick={deleteToast.onUndo}
+            className="px-3 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)', color: 'white' }}>
+            Undo
+          </button>
+        </motion.div>
       )}
     </div>
   )
