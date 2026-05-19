@@ -9,7 +9,7 @@ import SongCard from '@/components/music/SongCard'
 import LikeButton from '@/components/social/LikeButton'
 import CommentSection from '@/components/social/CommentSection'
 import Link from 'next/link'
-import { Play, Music2, ArrowLeft, Lock, Share2, Check, Shuffle } from 'lucide-react'
+import { Play, Music2, ArrowLeft, Lock, Share2, Check, Shuffle, Plus } from 'lucide-react'
 
 const THEME_STYLES = {
   midnight: { bg: '#080b24', c1: '#312e81', c2: '#1e1b4b', accent: '#818cf8' },
@@ -62,10 +62,12 @@ export default function CollectionPage({ params }: { params: Promise<{ username:
   const [col, setCol] = useState<DbCollection | null>(null)
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState('')
+  const [resolvedId, setResolvedId] = useState('')
 
   useEffect(() => {
     params.then(async ({ username: u, id }) => {
       setUsername(u)
+      setResolvedId(id)
       const data = await getCollection(id, user?.id)
       setCol(data)
       setLoading(false)
@@ -96,6 +98,7 @@ export default function CollectionPage({ params }: { params: Promise<{ username:
   const btnColor = theme === 'paper' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)'
   const songs = (col.songs ?? []).map(dbSongToSong)
   const glowRgb = th.accent.replace('#', '').match(/.{2}/g)?.map(x => parseInt(x, 16)).join(',') ?? '124,58,237'
+  const isOwner = !!user && col.user_id === user.id
 
   return (
     <div className="min-h-screen" style={{ background: th.bg }}>
@@ -139,6 +142,15 @@ export default function CollectionPage({ params }: { params: Promise<{ username:
             {/* Action buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <LikeButton collectionId={col.id} initialCount={col.like_count ?? 0} initialLiked={col.liked_by_me ?? false} glowRgb={glowRgb} />
+
+              {/* Owner: Add Songs button */}
+              {isOwner && (
+                <Link href="/me"
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white"
+                  style={{ background: `linear-gradient(135deg, ${th.accent}cc, #7c3aed)`, border: `1px solid ${th.accent}60` }}>
+                  <Plus size={13} /> Add Songs
+                </Link>
+              )}
 
               <ShareButton accentColor={th.accent} />
 

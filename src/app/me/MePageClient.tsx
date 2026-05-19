@@ -2,13 +2,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/components/providers/AuthProvider'
-import { getMySongs, getUserCollections, addDbSong, createCollection } from '@/lib/db'
+import { getMySongs, getUserCollections, addDbSong, createCollection, addSongToCollection, removeSongFromCollection } from '@/lib/db'
 import { DbSong, DbCollection, dbSongToSong } from '@/lib/types'
 import { usePlayer } from '@/components/providers/PlayerProvider'
 import SongCard from '@/components/music/SongCard'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle } from 'lucide-react'
+import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle, ListMusic, Check } from 'lucide-react'
 
 type Tab = 'songs' | 'collections'
 interface YTResult { id: string; title: string; channel: string; thumbnail: string }
@@ -239,6 +239,119 @@ function AddCollectionModal({ userId, onAdded, onClose }: { userId: string; onAd
   )
 }
 
+// ── MANAGE SONGS IN COLLECTION MODAL ─────────────────────────────────────────
+function ManageSongsModal({ collection, allSongs, onClose, onChanged }: {
+  collection: DbCollection
+  allSongs: DbSong[]
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [collectionSongIds, setCollectionSongIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  // Load which songs are already in this collection
+  useEffect(() => {
+    const sb = (async () => {
+      const { createClient } = await import('@/lib/supabase')
+      const client = createClient()
+      const { data } = await client
+        .from('collection_songs')
+        .select('song_id')
+        .eq('collection_id', collection.id)
+      setCollectionSongIds(new Set(data?.map((r: { song_id: string }) => r.song_id) ?? []))
+      setLoading(false)
+    })
+    sb()
+  }, [collection.id])
+
+  const toggle = async (songId: string) => {
+    setSaving(songId)
+    try {
+      if (collectionSongIds.has(songId)) {
+        await removeSongFromCollection(collection.id, songId)
+        setCollectionSongIds(prev => { const s = new Set(prev); s.delete(songId); return s })
+      } else {
+        await addSongToCollection(collection.id, songId)
+        setCollectionSongIds(prev => new Set([...prev, songId]))
+      }
+      onChanged()
+    } finally { setSaving(null) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="relative w-full max-w-md rounded-3xl p-6 max-h-[85vh] flex flex-col"
+        style={{ background: 'rgba(10,8,20,0.98)', border: '1px solid rgba(255,255,255,0.12)' }}>
+
+        <div className="flex items-center gap-3 mb-5">
+          <div className="text-2xl">{collection.emoji}</div>
+          <div>
+            <h3 className="text-white font-medium">{collection.name}</h3>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Tap a song to add or remove it</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin" style={{ color: '#818cf8' }} /></div>
+        ) : allSongs.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>No songs in your library yet.</p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.25)' }}>Add songs first using the "+ Add Song" button.</p>
+          </div>
+        ) : (
+          <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+            {allSongs.map(song => {
+              const inCollection = collectionSongIds.has(song.id)
+              const isSaving = saving === song.id
+              return (
+                <button key={song.id} onClick={() => toggle(song.id)} disabled={!!saving}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left"
+                  style={{
+                    background: inCollection ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${inCollection ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                    opacity: saving && saving !== song.id ? 0.5 : 1,
+                  }}>
+                  {song.cover_url
+                    ? <img src={song.cover_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                    : <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(124,58,237,0.3)' }}><Music2 size={16} color="#a78bfa" /></div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{song.title}</p>
+                    <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{song.artist}</p>
+                  </div>
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ background: inCollection ? '#7c3aed' : 'rgba(255,255,255,0.1)' }}>
+                    {isSaving
+                      ? <Loader2 size={12} className="animate-spin" color="white" />
+                      : inCollection
+                        ? <Check size={12} color="white" />
+                        : <Plus size={12} color="rgba(255,255,255,0.5)" />
+                    }
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            {collectionSongIds.size} song{collectionSongIds.size !== 1 ? 's' : ''} in collection
+          </p>
+          <button onClick={onClose}
+            className="px-5 py-2 rounded-xl text-sm font-medium text-white"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)' }}>
+            Done
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 export default function MePageClient() {
   const { user, profile, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -250,6 +363,7 @@ export default function MePageClient() {
   const [dbError, setDbError] = useState(false)
   const [showAddSong, setShowAddSong] = useState(false)
   const [showAddCol, setShowAddCol] = useState(false)
+  const [managingCollection, setManagingCollection] = useState<DbCollection | null>(null)
 
   const load = useCallback(async () => {
     if (!user) return
@@ -435,18 +549,29 @@ export default function MePageClient() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {collections.map(col => (
-                <Link key={col.id} href={`/u/${profile.username}/collection/${col.id}`}>
-                  <div className="p-5 rounded-2xl cursor-pointer transition-all hover:-translate-y-1 group"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                    <div className="text-3xl mb-2">{col.emoji}</div>
-                    <h3 className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
-                    {col.description && <p className="text-xs mb-2 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{col.description}</p>}
-                    <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <span className="flex items-center gap-1"><Music2 size={11} />{col.song_count ?? 0} songs</span>
-                      <span className="flex items-center gap-1"><Share2 size={11} />{col.is_public ? 'Public' : 'Private'}</span>
-                    </div>
+                <div key={col.id} className="p-5 rounded-2xl transition-all group"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="text-3xl mb-2">{col.emoji}</div>
+                  <h3 className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
+                  {col.description && <p className="text-xs mb-3 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{col.description}</p>}
+                  <div className="flex items-center gap-2 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+                    <span className="flex items-center gap-1"><Music2 size={11} />{col.song_count ?? 0} songs</span>
+                    <span className="flex items-center gap-1"><Share2 size={11} />{col.is_public ? 'Public' : 'Private'}</span>
                   </div>
-                </Link>
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    <button onClick={() => setManagingCollection(col)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all hover:opacity-80"
+                      style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)', color: 'white' }}>
+                      <Plus size={12} /> Add Songs
+                    </button>
+                    <Link href={`/u/${profile.username}/collection/${col.id}`}
+                      className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
+                      style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </div>
               ))}
             </div>
           )
@@ -455,6 +580,20 @@ export default function MePageClient() {
 
       {showAddSong && user && <AddSongModal userId={user.id} onAdded={handleSongAdded} onClose={() => setShowAddSong(false)} />}
       {showAddCol && user && <AddCollectionModal userId={user.id} onAdded={handleCollectionAdded} onClose={() => setShowAddCol(false)} />}
+      {managingCollection && (
+        <ManageSongsModal
+          collection={managingCollection}
+          allSongs={songs}
+          onClose={() => setManagingCollection(null)}
+          onChanged={() => {
+            // Update song_count optimistically then refresh
+            setCollections(prev => prev.map(c =>
+              c.id === managingCollection.id ? { ...c } : c
+            ))
+            setTimeout(() => load(), 800)
+          }}
+        />
+      )}
     </div>
   )
 }
