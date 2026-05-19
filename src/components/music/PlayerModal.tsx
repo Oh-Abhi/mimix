@@ -5,6 +5,7 @@ import { useEffect, useCallback } from 'react'
 import { usePlayer } from '@/components/providers/PlayerProvider'
 import { getSongGradient, gradientStyle } from '@/lib/songGradients'
 import { X, SkipBack, SkipForward, Volume2, Minimize2, Maximize2 } from 'lucide-react'
+import AddToCollectionButton from '@/components/social/AddToCollectionButton'
 
 function fmt(s: number) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60)
@@ -158,6 +159,11 @@ export default function PlayerModal() {
                 onChange={e => setVolume(Number(e.target.value))}
                 className="flex-1 h-1 rounded-full appearance-none cursor-pointer"
                 style={{ accentColor: 'var(--accent)' }} />
+            </div>
+
+            {/* Add to Collection — Spotify style */}
+            <div className="flex justify-center">
+              <AddToCollectionButton songId={song.id} variant="pill" accentColor="var(--accent)" />
             </div>
           </div>
         </motion.div>

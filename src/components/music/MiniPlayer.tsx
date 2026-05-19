@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import { usePlayer } from '@/components/providers/PlayerProvider'
 import { Maximize2, X, SkipForward } from 'lucide-react'
+import AddToCollectionButton from '@/components/social/AddToCollectionButton'
 
 export default function MiniPlayer() {
   const { state, maximize, closePlayer, togglePlay, skipNext } = usePlayer()
@@ -82,6 +83,11 @@ export default function MiniPlayer() {
             >
               <SkipForward size={14} strokeWidth={2} />
             </motion.button>
+
+            {/* Add to collection — Spotify style */}
+            <div onClick={e => e.stopPropagation()}>
+              <AddToCollectionButton songId={currentSong.id} variant="icon" />
+            </div>
 
             {/* Maximize */}
             <motion.button

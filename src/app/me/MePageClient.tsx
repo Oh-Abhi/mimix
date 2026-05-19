@@ -13,7 +13,13 @@ import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, Aler
 type Tab = 'songs' | 'collections'
 interface YTResult { id: string; title: string; channel: string; thumbnail: string }
 
-function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (song: DbSong) => void; onClose: () => void }) {
+function AddSongModal({ userId, collections, preselectedCollection, onAdded, onClose }: {
+  userId: string
+  collections: DbCollection[]
+  preselectedCollection?: DbCollection | null
+  onAdded: (song: DbSong) => void
+  onClose: () => void
+}) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YTResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -24,7 +30,8 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
   const [clipEnd, setClipEnd] = useState('0:30')
   const [saving, setSaving] = useState(false)
   const [albumArt, setAlbumArt] = useState('')
-  const [previewKey, setPreviewKey] = useState(0) // force iframe reload on preview
+  const [previewKey, setPreviewKey] = useState(0)
+  const [targetCollection, setTargetCollection] = useState<string>(preselectedCollection?.id ?? '')
 
   const toSecs = (mmss: string) => {
     const p = mmss.split(':')
@@ -66,7 +73,11 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
         cover_url: albumArt || selected.thumbnail,
         emotional_tag: emotionalTag, card_size: 'md',
       })
-      onAdded(newSong)  // pass back for optimistic update
+      // Also add to collection if one was chosen
+      if (targetCollection) {
+        await addSongToCollection(targetCollection, newSong.id)
+      }
+      onAdded(newSong)
       onClose()
     } catch (e) {
       console.error('Failed to save song:', e)
@@ -159,10 +170,45 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
             </div>
             <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Set the times above then click ▶ Play Clip to preview that exact section</p>
 
+            {/* Collection picker */}
+            {collections.length > 0 && (
+              <div>
+                <label className="text-[10px] mb-2 block uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  Add to collection <span className="normal-case font-normal">(optional)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setTargetCollection('')}
+                    className="px-3 py-1.5 rounded-lg text-xs transition-all"
+                    style={{
+                      background: !targetCollection ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${!targetCollection ? 'rgba(255,255,255,0.3)' : 'transparent'}`,
+                      color: !targetCollection ? 'white' : 'rgba(255,255,255,0.4)'
+                    }}>
+                    None
+                  </button>
+                  {collections.map(col => (
+                    <button key={col.id} onClick={() => setTargetCollection(col.id === targetCollection ? '' : col.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
+                      style={{
+                        background: targetCollection === col.id ? 'rgba(124,58,237,0.3)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${targetCollection === col.id ? 'rgba(124,58,237,0.6)' : 'transparent'}`,
+                        color: targetCollection === col.id ? '#c4b5fd' : 'rgba(255,255,255,0.5)'
+                      }}>
+                      {col.emoji} {col.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <motion.button onClick={save} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="w-full py-3 rounded-xl text-sm font-medium text-white flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)' }}>
-              {saving && <Loader2 size={14} className="animate-spin" />} Save Song
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {targetCollection
+                ? `Save & Add to ${collections.find(c => c.id === targetCollection)?.name ?? 'Collection'}`
+                : 'Save to Library'
+              }
             </motion.button>
           </div>
         )}
@@ -364,6 +410,12 @@ export default function MePageClient() {
   const [showAddSong, setShowAddSong] = useState(false)
   const [showAddCol, setShowAddCol] = useState(false)
   const [managingCollection, setManagingCollection] = useState<DbCollection | null>(null)
+  const [preselectedCollection, setPreselectedCollection] = useState<DbCollection | null>(null)
+
+  const openAddSong = (col?: DbCollection) => {
+    setPreselectedCollection(col ?? null)
+    setShowAddSong(true)
+  }
 
   const load = useCallback(async () => {
     if (!user) return
@@ -560,10 +612,16 @@ export default function MePageClient() {
                   </div>
                   {/* Action buttons */}
                   <div className="flex gap-2">
-                    <button onClick={() => setManagingCollection(col)}
+                    <button onClick={() => openAddSong(col)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all hover:opacity-80"
                       style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)', color: 'white' }}>
-                      <Plus size={12} /> Add Songs
+                      <Plus size={12} /> Add Song
+                    </button>
+                    <button onClick={() => setManagingCollection(col)}
+                      className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
+                      title="Manage songs in collection"
+                      style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      <ListMusic size={12} />
                     </button>
                     <Link href={`/u/${profile.username}/collection/${col.id}`}
                       className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
@@ -578,7 +636,15 @@ export default function MePageClient() {
         )}
       </div>
 
-      {showAddSong && user && <AddSongModal userId={user.id} onAdded={handleSongAdded} onClose={() => setShowAddSong(false)} />}
+      {showAddSong && user && (
+        <AddSongModal
+          userId={user.id}
+          collections={collections}
+          preselectedCollection={preselectedCollection}
+          onAdded={handleSongAdded}
+          onClose={() => { setShowAddSong(false); setPreselectedCollection(null) }}
+        />
+      )}
       {showAddCol && user && <AddCollectionModal userId={user.id} onAdded={handleCollectionAdded} onClose={() => setShowAddCol(false)} />}
       {managingCollection && (
         <ManageSongsModal
