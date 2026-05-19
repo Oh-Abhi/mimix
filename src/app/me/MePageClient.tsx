@@ -377,7 +377,7 @@ function ManageSongsModal({ collection, allSongs, onClose, onChanged }: {
 export default function MePageClient() {
   const { user, profile, loading: authLoading } = useAuth()
   const router = useRouter()
-  const { playSong, setSongs: setPlayerSongs } = usePlayer()
+  const { playSong, playSongList, setSongs: setPlayerSongs } = usePlayer()
   const [tab, setTab] = useState<Tab>('songs')
   const [songs, setSongs] = useState<DbSong[]>([])
   const [collections, setCollections] = useState<DbCollection[]>([])
@@ -423,6 +423,22 @@ export default function MePageClient() {
     })
     setTimeout(() => load(), 1000)
   }, [load, setPlayerSongs])
+
+  // Play a collection — fetches its songs and queues them
+  const playCollection = useCallback(async (colId: string) => {
+    const sb = (await import('@/lib/supabase')).createClient()
+    const { data } = await sb
+      .from('collection_songs')
+      .select('songs(*)')
+      .eq('collection_id', colId)
+      .order('position')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const colSongs = (data ?? []).map((r: any) => r.songs).filter(Boolean)
+    if (colSongs.length) {
+      const { dbSongToSong } = await import('@/lib/types')
+      playSongList(colSongs.map(dbSongToSong), false)
+    }
+  }, [playSongList])
 
   // Optimistic collection add
   const handleCollectionAdded = useCallback((newCol: DbCollection) => {
@@ -636,46 +652,79 @@ export default function MePageClient() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {collections.map(col => (
-                <div key={col.id} className="p-5 rounded-2xl transition-all group relative"
-                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div key={col.id} className="rounded-2xl overflow-hidden transition-all group relative hover:-translate-y-0.5"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 2px 20px rgba(0,0,0,0.3)' }}>
 
-                  {/* Three-dot menu */}
-                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setEditingCollection(col)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10"
-                      title="Edit collection" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => { if (confirm(`Delete "${col.name}"?`)) handleDeleteCollection(col.id) }}
-                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-500/20"
-                      title="Delete collection" style={{ color: '#f87171' }}>
-                      <Trash2 size={12} />
-                    </button>
+                  {/* Top: Song thumbnail mosaic */}
+                  <div className="relative h-36 bg-gradient-to-br from-purple-900/40 to-pink-900/40 overflow-hidden">
+                    {/* Placeholder gradient covers */}
+                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px">
+                      {[0,1,2,3].map(i => (
+                        <div key={i} className="relative overflow-hidden" style={{ background: `rgba(${80+i*20},${40+i*10},${150+i*15},0.4)` }}>
+                          <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(219,39,119,0.2))' }} />
+                        </div>
+                      ))}
+                    </div>
+                    {/* Large emoji centered */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-5xl opacity-80" style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }}>{col.emoji}</span>
+                    </div>
+                    {/* Play button overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ background: 'rgba(0,0,0,0.35)' }}>
+                      <motion.button
+                        onClick={() => playCollection(col.id)}
+                        whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                        className="w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
+                        style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)', boxShadow: '0 0 30px rgba(124,58,237,0.6)' }}>
+                        <Play size={20} fill="white" color="white" style={{ marginLeft: 2 }} />
+                      </motion.button>
+                    </div>
+                    {/* Edit/Delete icons top right */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button onClick={() => setEditingCollection(col)}
+                        className="w-6 h-6 rounded-full flex items-center justify-center"
+                        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', color: 'rgba(255,255,255,0.7)' }}>
+                        <Pencil size={10} />
+                      </button>
+                      <button onClick={() => { if (confirm(`Delete "${col.name}"?`)) handleDeleteCollection(col.id) }}
+                        className="w-6 h-6 rounded-full flex items-center justify-center"
+                        style={{ background: 'rgba(239,68,68,0.7)', backdropFilter: 'blur(8px)', color: 'white' }}>
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="text-3xl mb-2">{col.emoji}</div>
-                  <h3 className="font-medium mb-1 pr-16" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
-                  {col.description && <p className="text-xs mb-3 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{col.description}</p>}
-                  <div className="flex items-center gap-2 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
-                    <span className="flex items-center gap-1"><Music2 size={11} />{col.song_count ?? 0} songs</span>
-                    <span className="flex items-center gap-1"><Share2 size={11} />{col.is_public ? 'Public' : 'Private'}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => openAddSong(col)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                      style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)', color: 'white' }}>
-                      <Plus size={12} /> Add Song
-                    </button>
-                    <button onClick={() => setManagingCollection(col)}
-                      className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
-                      title="Manage songs" style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                      <ListMusic size={12} />
-                    </button>
-                    <Link href={`/u/${profile.username}/collection/${col.id}`}
-                      className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
-                      style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                      <ExternalLink size={12} />
-                    </Link>
+                  {/* Bottom: info + actions */}
+                  <div className="p-4">
+                    <h3 className="font-medium truncate mb-0.5" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
+                    {col.description && <p className="text-xs line-clamp-1 mb-2" style={{ color: 'var(--text-muted)' }}>{col.description}</p>}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <span className="flex items-center gap-1"><Music2 size={10} />{col.song_count ?? 0} songs</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: col.is_public ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.08)', color: col.is_public ? '#86efac' : 'rgba(255,255,255,0.4)' }}>
+                          {col.is_public ? '🌍 Public' : '🔒 Private'}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => openAddSong(col)} title="Add song"
+                          className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                          style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)' }}>
+                          <Plus size={13} color="white" />
+                        </button>
+                        <button onClick={() => setManagingCollection(col)} title="Manage songs"
+                          className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-white/10"
+                          style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                          <ListMusic size={11} />
+                        </button>
+                        <Link href={`/u/${profile.username}/collection/${col.id}`} title="View collection"
+                          className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-white/10"
+                          style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                          <ExternalLink size={11} />
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}

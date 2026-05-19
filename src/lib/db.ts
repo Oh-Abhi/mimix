@@ -111,7 +111,8 @@ export async function getCollection(collectionId: string, viewerId?: string): Pr
 
   return {
     ...data,
-    songs: cSongs?.map((r: { songs: DbSong[] }) => r.songs[0]).filter(Boolean) ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    songs: cSongs?.map((r: any) => r.songs as DbSong).filter(Boolean) ?? [],
     like_count: likeCount ?? 0,
     liked_by_me: likedByMe,
   }
@@ -178,8 +179,15 @@ export async function getTagRecommendations(userId: string): Promise<{ tag: stri
 
 export async function addSongToCollection(collectionId: string, songId: string) {
   const sb = createClient()
-  const { data: max } = await sb.from('collection_songs').select('position').eq('collection_id', collectionId).order('position', { ascending: false }).limit(1).single()
-  await sb.from('collection_songs').insert({ collection_id: collectionId, song_id: songId, position: (max?.position ?? 0) + 1 })
+  // Check not already in collection
+  const { data: existing } = await sb.from('collection_songs')
+    .select('song_id').eq('collection_id', collectionId).eq('song_id', songId).maybeSingle()
+  if (existing) return // already in there
+  const { data: max } = await sb.from('collection_songs').select('position')
+    .eq('collection_id', collectionId).order('position', { ascending: false }).limit(1).maybeSingle()
+  const { error } = await sb.from('collection_songs')
+    .insert({ collection_id: collectionId, song_id: songId, position: (max?.position ?? 0) + 1 })
+  if (error) throw error
 }
 
 export async function removeSongFromCollection(collectionId: string, songId: string) {
