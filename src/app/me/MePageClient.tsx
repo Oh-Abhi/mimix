@@ -2,13 +2,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/components/providers/AuthProvider'
-import { getMySongs, getUserCollections, addDbSong, createCollection, addSongToCollection, removeSongFromCollection } from '@/lib/db'
+import { getMySongs, getUserCollections, addDbSong, createCollection, addSongToCollection, removeSongFromCollection, deleteDbSong, deleteCollection, updateCollection } from '@/lib/db'
 import { DbSong, DbCollection, dbSongToSong } from '@/lib/types'
 import { usePlayer } from '@/components/providers/PlayerProvider'
 import SongCard from '@/components/music/SongCard'
+import YouTubeClipPicker from '@/components/music/YouTubeClipPicker'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle, ListMusic, Check } from 'lucide-react'
+import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, AlertTriangle, ListMusic, Check, MoreVertical, Pencil, Trash2, Tag, X } from 'lucide-react'
 
 type Tab = 'songs' | 'collections'
 interface YTResult { id: string; title: string; channel: string; thumbnail: string }
@@ -26,17 +27,12 @@ function AddSongModal({ userId, collections, preselectedCollection, onAdded, onC
   const [selected, setSelected] = useState<YTResult | null>(null)
   const [artist, setArtist] = useState('')
   const [emotionalTag, setEmotionalTag] = useState('')
-  const [clipStart, setClipStart] = useState('0:00')
-  const [clipEnd, setClipEnd] = useState('0:30')
+  const [clipStart, setClipStart] = useState(0)   // seconds
+  const [clipEnd, setClipEnd] = useState(30)        // seconds
   const [saving, setSaving] = useState(false)
   const [albumArt, setAlbumArt] = useState('')
-  const [previewKey, setPreviewKey] = useState(0)
   const [targetCollection, setTargetCollection] = useState<string>(preselectedCollection?.id ?? '')
 
-  const toSecs = (mmss: string) => {
-    const p = mmss.split(':')
-    return p.length === 2 ? parseInt(p[0]) * 60 + parseInt(p[1]) : parseFloat(mmss) || 0
-  }
 
   const fetchAlbumArt = async (artist: string, title: string) => {
     try {
@@ -69,7 +65,7 @@ function AddSongModal({ userId, collections, preselectedCollection, onAdded, onC
       const newSong = await addDbSong({
         user_id: userId, title: selected.title,
         artist: artist || selected.channel, youtube_id: selected.id,
-        clip_start: toSecs(clipStart), clip_end: toSecs(clipEnd),
+        clip_start: clipStart, clip_end: clipEnd,
         cover_url: albumArt || selected.thumbnail,
         emotional_tag: emotionalTag, card_size: 'md',
       })
@@ -118,34 +114,20 @@ function AddSongModal({ userId, collections, preselectedCollection, onAdded, onC
 
         {selected && (
           <div className="space-y-3">
-            {/* ── CLIP PREVIEW PLAYER ── */}
-            <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <iframe
-                key={previewKey}
-                src={`https://www.youtube.com/embed/${selected.id}?start=${toSecs(clipStart)}&end=${toSecs(clipEnd)}&autoplay=${previewKey > 0 ? 1 : 0}&rel=0&modestbranding=1`}
-                className="w-full"
-                style={{ height: 180 }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                  Preview: {clipStart} → {clipEnd} ({Math.max(0, toSecs(clipEnd) - toSecs(clipStart))}s)
-                </span>
-                <button onClick={() => setPreviewKey(k => k + 1)}
-                  className="text-[11px] px-3 py-1 rounded-lg font-medium flex items-center gap-1.5"
-                  style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.4)' }}>
-                  ▶ Play Clip
-                </button>
-              </div>
-            </div>
+            {/* ── VISUAL CLIP PICKER (YouTube IFrame API) ── */}
+            <YouTubeClipPicker
+              videoId={selected.id}
+              initialStart={clipStart}
+              initialEnd={clipEnd}
+              onClipChange={(s, e) => { setClipStart(s); setClipEnd(e) }}
+            />
 
             {/* Album art indicator */}
             {albumArt && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
                 style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
                 <img src={albumArt} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                <span className="text-[11px]" style={{ color: '#86efac' }}>iTunes album art found ✓</span>
+                <span className="text-[11px]" style={{ color: '#86efac' }}>iTunes album art ✓</span>
               </div>
             )}
 
@@ -156,19 +138,13 @@ function AddSongModal({ userId, collections, preselectedCollection, onAdded, onC
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
 
-            {/* Clip time inputs */}
-            <div className="grid grid-cols-2 gap-2">
-              {([['Clip Start', clipStart, setClipStart], ['Clip End', clipEnd, setClipEnd]] as [string, string, (v: string) => void][]).map(([label, val, set]) => (
-                <div key={label}>
-                  <label className="text-[10px] mb-1 block" style={{ color: 'rgba(255,255,255,0.4)' }}>{label} (mm:ss)</label>
-                  <input value={val} onChange={e => set(e.target.value)}
-                    onBlur={() => setPreviewKey(0)} // reset preview when times change
-                    className="w-full px-3 py-2 rounded-xl text-sm outline-none font-mono"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
-                </div>
-              ))}
+            {/* Clip display */}
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl text-xs"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ color: '#a78bfa' }}>▶ {Math.floor(clipStart/60)}:{String(Math.floor(clipStart%60)).padStart(2,'0')}</span>
+              <span style={{ color: 'rgba(255,255,255,0.3)' }}>{Math.round(clipEnd - clipStart)}s clip</span>
+              <span style={{ color: '#f472b6' }}>⏹ {Math.floor(clipEnd/60)}:{String(Math.floor(clipEnd%60)).padStart(2,'0')}</span>
             </div>
-            <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Set the times above then click ▶ Play Clip to preview that exact section</p>
 
             {/* Collection picker */}
             {collections.length > 0 && (
@@ -411,6 +387,9 @@ export default function MePageClient() {
   const [showAddCol, setShowAddCol] = useState(false)
   const [managingCollection, setManagingCollection] = useState<DbCollection | null>(null)
   const [preselectedCollection, setPreselectedCollection] = useState<DbCollection | null>(null)
+  const [editingCollection, setEditingCollection] = useState<DbCollection | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [playerSongs, setPlayerSongsLocal] = useState(songs.map(dbSongToSong))
 
   const openAddSong = (col?: DbCollection) => {
     setPreselectedCollection(col ?? null)
@@ -449,6 +428,28 @@ export default function MePageClient() {
   const handleCollectionAdded = useCallback((newCol: DbCollection) => {
     setCollections(prev => [newCol, ...prev])
     setTimeout(() => load(), 1000)
+  }, [load])
+
+  // Delete song
+  const handleDeleteSong = useCallback(async (songId: string) => {
+    setSongs(prev => {
+      const updated = prev.filter(s => s.id !== songId)
+      setPlayerSongs(updated.map(dbSongToSong))
+      return updated
+    })
+    try { await deleteDbSong(songId) } catch { load() }
+  }, [deleteDbSong, setPlayerSongs, load])
+
+  // Delete collection
+  const handleDeleteCollection = useCallback(async (colId: string) => {
+    setCollections(prev => prev.filter(c => c.id !== colId))
+    try { await deleteCollection(colId) } catch { load() }
+  }, [load])
+
+  // Update collection
+  const handleUpdateCollection = useCallback(async (colId: string, updates: { name?: string; description?: string; emoji?: string; is_public?: boolean }) => {
+    setCollections(prev => prev.map(c => c.id === colId ? { ...c, ...updates } : c))
+    try { await updateCollection(colId, updates) } catch { load() }
   }, [load])
 
   useEffect(() => {
@@ -512,8 +513,6 @@ export default function MePageClient() {
       <Loader2 size={24} className="animate-spin" style={{ color: 'var(--accent)' }} />
     </div>
   )
-
-  const playerSongs = songs.map(dbSongToSong)
 
   return (
     <div className="min-h-screen pt-28 pb-20 px-6 sm:px-10 lg:px-16">
@@ -581,13 +580,49 @@ export default function MePageClient() {
                 <Plus size={14} className="inline mr-2" />Add Song
               </motion.button>
             </div>
-          ) : (
-            <div className="masonry-grid">
-              {playerSongs.map((song, i) => (
-                <SongCard key={song.id} song={song} index={i} view="grid" onClick={() => { playSong(song); setPlayerSongs(playerSongs) }} />
-              ))}
-            </div>
-          )
+          ) : (() => {
+            // Unique tags
+            const allTags = [...new Set(songs.map(s => s.emotional_tag).filter(Boolean))]
+            const filtered = tagFilter ? songs.filter(s => s.emotional_tag === tagFilter) : songs
+            const filteredSongs = filtered.map(dbSongToSong)
+            return (
+              <div>
+                {/* Tag filter pills */}
+                {allTags.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap mb-5">
+                    <Tag size={12} style={{ color: 'var(--text-muted)' }} />
+                    <button onClick={() => setTagFilter(null)}
+                      className="px-3 py-1 rounded-full text-xs transition-all"
+                      style={{ background: !tagFilter ? 'var(--accent)' : 'var(--surface)', color: !tagFilter ? 'white' : 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                      All
+                    </button>
+                    {allTags.map(tag => (
+                      <button key={tag} onClick={() => setTagFilter(tag === tagFilter ? null : tag)}
+                        className="px-3 py-1 rounded-full text-xs transition-all"
+                        style={{ background: tagFilter === tag ? 'var(--accent)' : 'var(--surface)', color: tagFilter === tag ? 'white' : 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="masonry-grid">
+                  {filteredSongs.map((song, i) => (
+                    <div key={song.id} className="relative group">
+                      <SongCard song={song} index={i} view="grid"
+                        onClick={() => { playSong(song); setPlayerSongs(filteredSongs) }} />
+                      {/* Delete button — appears on hover */}
+                      <button onClick={e => { e.stopPropagation(); if (confirm('Delete this song?')) handleDeleteSong(song.id) }}
+                        className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        style={{ background: 'rgba(239,68,68,0.8)', backdropFilter: 'blur(8px)' }}
+                        title="Delete song">
+                        <Trash2 size={12} color="white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()
         ) : (
           collections.length === 0 ? (
             <div className="text-center py-20">
@@ -601,16 +636,30 @@ export default function MePageClient() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {collections.map(col => (
-                <div key={col.id} className="p-5 rounded-2xl transition-all group"
+                <div key={col.id} className="p-5 rounded-2xl transition-all group relative"
                   style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+
+                  {/* Three-dot menu */}
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => setEditingCollection(col)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10"
+                      title="Edit collection" style={{ color: 'var(--text-muted)' }}>
+                      <Pencil size={12} />
+                    </button>
+                    <button onClick={() => { if (confirm(`Delete "${col.name}"?`)) handleDeleteCollection(col.id) }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-500/20"
+                      title="Delete collection" style={{ color: '#f87171' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+
                   <div className="text-3xl mb-2">{col.emoji}</div>
-                  <h3 className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
+                  <h3 className="font-medium mb-1 pr-16" style={{ color: 'var(--text-primary)' }}>{col.name}</h3>
                   {col.description && <p className="text-xs mb-3 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{col.description}</p>}
                   <div className="flex items-center gap-2 text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
                     <span className="flex items-center gap-1"><Music2 size={11} />{col.song_count ?? 0} songs</span>
                     <span className="flex items-center gap-1"><Share2 size={11} />{col.is_public ? 'Public' : 'Private'}</span>
                   </div>
-                  {/* Action buttons */}
                   <div className="flex gap-2">
                     <button onClick={() => openAddSong(col)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all hover:opacity-80"
@@ -619,8 +668,7 @@ export default function MePageClient() {
                     </button>
                     <button onClick={() => setManagingCollection(col)}
                       className="flex items-center justify-center px-3 py-2 rounded-xl text-xs transition-all hover:opacity-70"
-                      title="Manage songs in collection"
-                      style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      title="Manage songs" style={{ background: 'var(--accent-glow)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                       <ListMusic size={12} />
                     </button>
                     <Link href={`/u/${profile.username}/collection/${col.id}`}
@@ -651,15 +699,82 @@ export default function MePageClient() {
           collection={managingCollection}
           allSongs={songs}
           onClose={() => setManagingCollection(null)}
-          onChanged={() => {
-            // Update song_count optimistically then refresh
-            setCollections(prev => prev.map(c =>
-              c.id === managingCollection.id ? { ...c } : c
-            ))
-            setTimeout(() => load(), 800)
-          }}
+          onChanged={() => { setCollections(prev => prev.map(c => c.id === managingCollection.id ? { ...c } : c)); setTimeout(() => load(), 800) }}
         />
       )}
+      {editingCollection && (
+        <EditCollectionModal
+          collection={editingCollection}
+          onSave={async (updates) => { await handleUpdateCollection(editingCollection.id, updates); setEditingCollection(null) }}
+          onClose={() => setEditingCollection(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── EDIT COLLECTION MODAL ─────────────────────────────────────────────
+function EditCollectionModal({ collection, onSave, onClose }: {
+  collection: DbCollection
+  onSave: (updates: { name?: string; description?: string; emoji?: string; is_public?: boolean }) => Promise<void>
+  onClose: () => void
+}) {
+  const [name, setName] = useState(collection.name)
+  const [description, setDescription] = useState(collection.description ?? '')
+  const [emoji, setEmoji] = useState(collection.emoji)
+  const [isPublic, setIsPublic] = useState(collection.is_public)
+  const [saving, setSaving] = useState(false)
+  const EMOJIS = ['🎵','🎶','🎸','🎹','🎺','🥁','🎤','🌙','☀️','🌊','🔥','💜','❤️','💫','🌸','🦋','🎭','🎨','✨','🌈']
+
+  const save = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try { await onSave({ name, description, emoji, is_public: isPublic }) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="relative w-full max-w-sm rounded-3xl p-6"
+        style={{ background: 'rgba(10,8,20,0.97)', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <h3 className="text-white font-medium text-lg mb-4">Edit Collection</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs mb-2 block" style={{ color: 'rgba(255,255,255,0.4)' }}>Emoji</label>
+            <div className="flex flex-wrap gap-1.5">
+              {EMOJIS.map(e => (
+                <button key={e} onClick={() => setEmoji(e)}
+                  className="w-9 h-9 rounded-xl text-lg transition-all"
+                  style={{ background: emoji === e ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.05)', border: `1px solid ${emoji === e ? 'rgba(124,58,237,0.6)' : 'transparent'}` }}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Collection name"
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
+          <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)" rows={2}
+            className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
+          <button onClick={() => setIsPublic(p => !p)}
+            className="w-full py-2.5 rounded-xl text-sm flex items-center justify-between px-3"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}>
+            <span>{isPublic ? '🌍 Public' : '🔒 Private'}</span>
+            <div className="w-8 h-4 rounded-full relative transition-all" style={{ background: isPublic ? '#7c3aed' : 'rgba(255,255,255,0.2)' }}>
+              <div className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" style={{ left: isPublic ? '18px' : '2px' }} />
+            </div>
+          </button>
+          <motion.button onClick={save} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            className="w-full py-3 rounded-xl text-sm font-medium text-white flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)' }}>
+            {saving && <Loader2 size={14} className="animate-spin" />} Save Changes
+          </motion.button>
+        </div>
+        <button onClick={onClose} className="mt-3 w-full py-2 text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>Cancel</button>
+      </motion.div>
     </div>
   )
 }

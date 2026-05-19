@@ -22,7 +22,7 @@ interface PlayerContextType {
 const Ctx = createContext<PlayerContextType | null>(null)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare global { interface Window { YT: any; onYouTubeIframeAPIReady?: () => void } }
+declare global { interface Window { YT: any; onYouTubeIframeAPIReady: (() => void) | undefined } }
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [songs, setSongs] = useState<Song[]>([])

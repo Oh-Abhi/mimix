@@ -124,6 +124,58 @@ export async function createCollection(col: { user_id: string; name: string; des
   return data
 }
 
+export async function updateCollection(id: string, updates: { name?: string; description?: string; emoji?: string; is_public?: boolean }) {
+  const sb = createClient()
+  const { error } = await sb.from('music_collections').update(updates).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteCollection(id: string) {
+  const sb = createClient()
+  // cascade deletes collection_songs rows first (or rely on DB cascade)
+  await sb.from('collection_songs').delete().eq('collection_id', id)
+  const { error } = await sb.from('music_collections').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function getTagRecommendations(userId: string): Promise<{ tag: string; collections: DbCollection[] }[]> {
+  const sb = createClient()
+  // Get user's top tags
+  const { data: userSongs } = await sb.from('songs').select('emotional_tag').eq('user_id', userId)
+  const tagCount: Record<string, number> = {}
+  userSongs?.forEach(s => { if (s.emotional_tag) tagCount[s.emotional_tag] = (tagCount[s.emotional_tag] ?? 0) + 1 })
+  const topTags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t)
+  if (!topTags.length) return []
+
+  const results: { tag: string; collections: DbCollection[] }[] = []
+  for (const tag of topTags) {
+    // Find public collections that have songs with this tag (from other users)
+    const { data: songMatches } = await sb
+      .from('songs')
+      .select('id')
+      .ilike('emotional_tag', `%${tag}%`)
+      .neq('user_id', userId)
+    const songIds = (songMatches ?? []).map((s: { id: string }) => s.id)
+    if (!songIds.length) continue
+
+    const { data: colSongs } = await sb
+      .from('collection_songs')
+      .select('collection_id')
+      .in('song_id', songIds)
+    const colIds = [...new Set((colSongs ?? []).map((r: { collection_id: string }) => r.collection_id))].slice(0, 8)
+    if (!colIds.length) continue
+
+    const { data: cols } = await sb
+      .from('music_collections')
+      .select('*, profiles(username, display_name, avatar_url, theme)')
+      .in('id', colIds)
+      .eq('is_public', true)
+      .limit(8)
+    if (cols?.length) results.push({ tag, collections: cols })
+  }
+  return results
+}
+
 export async function addSongToCollection(collectionId: string, songId: string) {
   const sb = createClient()
   const { data: max } = await sb.from('collection_songs').select('position').eq('collection_id', collectionId).order('position', { ascending: false }).limit(1).single()
