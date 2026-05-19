@@ -1,0 +1,62 @@
+[
+  {
+    "id": "article-1",
+    "url": "https://paulgraham.com/greatwork.html",
+    "title": "How to Do Great Work",
+    "description": "The key question to ask before taking on any project: is this the kind of thing that could be great? Paul Graham on finding and pursuing work that matters.",
+    "imageUrl": "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=800&q=80",
+    "publication": "Paul Graham",
+    "readingTime": 15,
+    "tags": ["work", "creativity", "philosophy"],
+    "collections": ["sunday reads"],
+    "addedAt": "2026-05-01T00:00:00Z"
+  },
+  {
+    "id": "article-2",
+    "url": "https://waitbutwhy.com/2014/05/life-weeks.html",
+    "title": "Your Life in Weeks",
+    "description": "A visual look at the brevity of a human life — and why that's not depressing at all, but completely freeing.",
+    "imageUrl": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80",
+    "publication": "Wait But Why",
+    "readingTime": 8,
+    "tags": ["life", "time", "perspective"],
+    "collections": ["2am thoughts"],
+    "addedAt": "2026-05-02T00:00:00Z"
+  },
+  {
+    "id": "article-3",
+    "url": "https://paulgraham.com/identity.html",
+    "title": "Keep Your Identity Small",
+    "description": "The more you identify with a label, the less you can think clearly about it. Paul Graham on why keeping your identity small makes you smarter.",
+    "imageUrl": "https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=800&q=80",
+    "publication": "Paul Graham",
+    "readingTime": 5,
+    "tags": ["identity", "thinking", "self"],
+    "collections": ["sunday reads", "2am thoughts"],
+    "addedAt": "2026-05-03T00:00:00Z"
+  },
+  {
+    "id": "article-4",
+    "url": "https://fs.blog/mental-models/",
+    "title": "The Most Useful Mental Models",
+    "description": "A curated collection of thinking frameworks that will permanently change how you see every decision in life.",
+    "imageUrl": "https://images.unsplash.com/photo-1531346680769-a1d79b57de5c?w=800&q=80",
+    "publication": "Farnam Street",
+    "readingTime": 12,
+    "tags": ["thinking", "strategy", "models"],
+    "collections": ["sunday reads"],
+    "addedAt": "2026-05-04T00:00:00Z"
+  },
+  {
+    "id": "article-5",
+    "url": "https://ava.substack.com/p/effort",
+    "title": "Effort",
+    "description": "On the quiet kind of effort that nobody sees — the one that happens before you're ready, before it's perfect, before anyone notices.",
+    "imageUrl": "https://images.unsplash.com/photo-1474631245212-32dc3c8310c6?w=800&q=80",
+    "publication": "Substack (ava)",
+    "readingTime": 6,
+    "tags": ["effort", "growth", "writing"],
+    "collections": ["2am thoughts"],
+    "addedAt": "2026-05-05T00:00:00Z"
+  }
+]

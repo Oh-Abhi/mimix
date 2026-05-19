@@ -1,0 +1,26 @@
+[
+  {
+    "id": "ac-1",
+    "name": "Sunday Reads",
+    "description": "Long reads for slow mornings with coffee",
+    "emoji": "☕",
+    "articleIds": ["article-1", "article-3"],
+    "addedAt": "2026-05-01T00:00:00Z"
+  },
+  {
+    "id": "ac-2",
+    "name": "2am Thoughts",
+    "description": "Articles that hit different at night",
+    "emoji": "✨",
+    "articleIds": ["article-2", "article-3"],
+    "addedAt": "2026-05-02T00:00:00Z"
+  },
+  {
+    "id": "ac-3",
+    "name": "Philosophy",
+    "description": "Ideas that rewired the way I think",
+    "emoji": "🧠",
+    "articleIds": ["article-1", "article-4"],
+    "addedAt": "2026-05-03T00:00:00Z"
+  }
+]

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "song-1",
+    "title": "Tum Hi Ho",
+    "artist": "Arijit Singh",
+    "emotionalTag": "when everything else fades away",
+    "coverUrl": "",
+    "youtubeId": "Umylny49-Vc",
+    "clipStart": 18,
+    "clipEnd": 58,
+    "collections": ["late nights", "her"],
+    "addedAt": "2026-05-01T00:00:00Z",
+    "cardSize": "lg"
+  },
+  {
+    "id": "song-2",
+    "title": "Raatan Lambiyan",
+    "artist": "Jubin Nautiyal & Asees Kaur",
+    "emotionalTag": "long nights missing someone",
+    "coverUrl": "",
+    "youtubeId": "h_U0dJKQb_4",
+    "clipStart": 33,
+    "clipEnd": 75,
+    "collections": ["late nights", "her"],
+    "addedAt": "2026-05-02T00:00:00Z",
+    "cardSize": "md"
+  },
+  {
+    "id": "song-3",
+    "title": "Channa Mereya",
+    "artist": "Arijit Singh",
+    "emotionalTag": "bittersweet goodbye you remember forever",
+    "coverUrl": "",
+    "youtubeId": "zbEdS-굴",
+    "clipStart": 22,
+    "clipEnd": 65,
+    "collections": ["her", "rain"],
+    "addedAt": "2026-05-03T00:00:00Z",
+    "cardSize": "sm"
+  },
+  {
+    "id": "song-4",
+    "title": "Experience",
+    "artist": "Ludovico Einaudi",
+    "emotionalTag": "the moment before everything changed",
+    "coverUrl": "",
+    "youtubeId": "hN_q-_nGv4U",
+    "clipStart": 60,
+    "clipEnd": 100,
+    "collections": ["late nights"],
+    "addedAt": "2026-05-04T00:00:00Z",
+    "cardSize": "md"
+  },
+  {
+    "id": "song-5",
+    "title": "River Flows in You",
+    "artist": "Yiruma",
+    "emotionalTag": "soft and endlessly gentle",
+    "coverUrl": "",
+    "youtubeId": "7maJOI3QMu0",
+    "clipStart": 0,
+    "clipEnd": 40,
+    "collections": ["rain"],
+    "addedAt": "2026-05-05T00:00:00Z",
+    "cardSize": "sm"
+  },
+  {
+    "id": "song-6",
+    "title": "Kesariya",
+    "artist": "Arijit Singh",
+    "emotionalTag": "golden afternoons with someone special",
+    "coverUrl": "",
+    "youtubeId": "BddP6PYo2gs",
+    "clipStart": 45,
+    "clipEnd": 90,
+    "collections": ["her"],
+    "addedAt": "2026-05-06T00:00:00Z",
+    "cardSize": "lg"
+  },
+  {
+    "id": "song-7",
+    "title": "Tera Ban Jaunga",
+    "artist": "Akhil Sachdeva & Tulsi Kumar",
+    "emotionalTag": "want to be yours completely",
+    "coverUrl": "",
+    "youtubeId": "AkmD7_nF9nQ",
+    "clipStart": 30,
+    "clipEnd": 70,
+    "collections": ["her", "late nights"],
+    "addedAt": "2026-05-07T00:00:00Z",
+    "cardSize": "md"
+  }
+]

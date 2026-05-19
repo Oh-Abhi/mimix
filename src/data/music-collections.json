@@ -1,0 +1,26 @@
+[
+  {
+    "id": "mc-1",
+    "name": "Late Nights",
+    "description": "Songs for 2am when the world is quiet",
+    "emoji": "🌙",
+    "songIds": ["song-1", "song-2", "song-4", "song-6"],
+    "addedAt": "2026-05-01T00:00:00Z"
+  },
+  {
+    "id": "mc-2",
+    "name": "Feels Like Rain",
+    "description": "Music that sounds like grey skies and wet pavement",
+    "emoji": "🌧️",
+    "songIds": ["song-1", "song-3", "song-4"],
+    "addedAt": "2026-05-02T00:00:00Z"
+  },
+  {
+    "id": "mc-3",
+    "name": "Songs for Her",
+    "description": "The ones that still make you feel something",
+    "emoji": "🌸",
+    "songIds": ["song-3", "song-5", "song-6"],
+    "addedAt": "2026-05-03T00:00:00Z"
+  }
+]
