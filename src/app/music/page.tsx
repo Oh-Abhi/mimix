@@ -1,2 +1,2 @@
-import MusicPageClient from './MusicPageClient'
-export default function MusicPage() { return <MusicPageClient /> }
+import { redirect } from 'next/navigation'
+export default function MusicPage() { redirect('/me') }

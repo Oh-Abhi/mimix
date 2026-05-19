@@ -1,2 +1,2 @@
-import CollectionsPageClient from './CollectionsPageClient'
-export default function CollectionsPage() { return <CollectionsPageClient /> }
+import { redirect } from 'next/navigation'
+export default function CollectionsPage() { redirect('/me') }

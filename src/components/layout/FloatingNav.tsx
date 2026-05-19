@@ -9,13 +9,10 @@ import { Music, Layers, Settings, Compass, User, LogOut, Music2 } from 'lucide-r
 
 const guestNav = [
   { href: '/', label: 'Discover', icon: <Compass size={17} strokeWidth={1.8} /> },
-  { href: '/music', label: 'Music', icon: <Music size={17} strokeWidth={1.8} /> },
-  { href: '/collections', label: 'Collections', icon: <Layers size={17} strokeWidth={1.8} /> },
 ]
 const authNav = [
   { href: '/', label: 'Discover', icon: <Compass size={17} strokeWidth={1.8} /> },
   { href: '/me', label: 'My Music', icon: <Music2 size={17} strokeWidth={1.8} /> },
-  { href: '/collections', label: 'Collections', icon: <Layers size={17} strokeWidth={1.8} /> },
 ]
 
 const THEME_META: Record<Theme, { label: string; emoji: string; next: string }> = {

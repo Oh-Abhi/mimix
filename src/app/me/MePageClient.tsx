@@ -13,7 +13,7 @@ import { Plus, Music2, Layers, Play, Share2, Loader2, Search, ExternalLink, Aler
 type Tab = 'songs' | 'collections'
 interface YTResult { id: string; title: string; channel: string; thumbnail: string }
 
-function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: () => void; onClose: () => void }) {
+function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (song: DbSong) => void; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<YTResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -24,6 +24,7 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
   const [clipEnd, setClipEnd] = useState('0:30')
   const [saving, setSaving] = useState(false)
   const [albumArt, setAlbumArt] = useState('')
+  const [previewKey, setPreviewKey] = useState(0) // force iframe reload on preview
 
   const toSecs = (mmss: string) => {
     const p = mmss.split(':')
@@ -58,14 +59,17 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
     if (!selected) return
     setSaving(true)
     try {
-      await addDbSong({
+      const newSong = await addDbSong({
         user_id: userId, title: selected.title,
         artist: artist || selected.channel, youtube_id: selected.id,
         clip_start: toSecs(clipStart), clip_end: toSecs(clipEnd),
         cover_url: albumArt || selected.thumbnail,
         emotional_tag: emotionalTag, card_size: 'md',
       })
-      onAdded(); onClose()
+      onAdded(newSong)  // pass back for optimistic update
+      onClose()
+    } catch (e) {
+      console.error('Failed to save song:', e)
     } finally { setSaving(false) }
   }
 
@@ -103,30 +107,58 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
 
         {selected && (
           <div className="space-y-3">
-            {/* Album art preview */}
+            {/* ── CLIP PREVIEW PLAYER ── */}
+            <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <iframe
+                key={previewKey}
+                src={`https://www.youtube.com/embed/${selected.id}?start=${toSecs(clipStart)}&end=${toSecs(clipEnd)}&autoplay=${previewKey > 0 ? 1 : 0}&rel=0&modestbranding=1`}
+                className="w-full"
+                style={{ height: 180 }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                  Preview: {clipStart} → {clipEnd} ({Math.max(0, toSecs(clipEnd) - toSecs(clipStart))}s)
+                </span>
+                <button onClick={() => setPreviewKey(k => k + 1)}
+                  className="text-[11px] px-3 py-1 rounded-lg font-medium flex items-center gap-1.5"
+                  style={{ background: 'rgba(124,58,237,0.3)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.4)' }}>
+                  ▶ Play Clip
+                </button>
+              </div>
+            </div>
+
+            {/* Album art indicator */}
             {albumArt && (
-              <div className="relative h-24 rounded-xl overflow-hidden">
-                <img src={albumArt} alt="" className="w-full h-full object-cover" />
-                <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
-                <span className="absolute bottom-2 left-2 text-[10px] text-white">iTunes cover found ✓</span>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                <img src={albumArt} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                <span className="text-[11px]" style={{ color: '#86efac' }}>iTunes album art found ✓</span>
               </div>
             )}
+
             <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Artist name"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
-            <input value={emotionalTag} onChange={e => setEmotionalTag(e.target.value)} placeholder="Emotional tag (e.g. 2am drives)"
+            <input value={emotionalTag} onChange={e => setEmotionalTag(e.target.value)} placeholder="Mood tag (e.g. 2am drives)"
               className="w-full px-3 py-2 rounded-xl text-sm outline-none"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
+
+            {/* Clip time inputs */}
             <div className="grid grid-cols-2 gap-2">
-              {([['Clip Start (mm:ss)', clipStart, setClipStart], ['Clip End (mm:ss)', clipEnd, setClipEnd]] as [string, string, (v: string) => void][]).map(([label, val, set]) => (
+              {([['Clip Start', clipStart, setClipStart], ['Clip End', clipEnd, setClipEnd]] as [string, string, (v: string) => void][]).map(([label, val, set]) => (
                 <div key={label}>
-                  <label className="text-[10px] mb-1 block" style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</label>
+                  <label className="text-[10px] mb-1 block" style={{ color: 'rgba(255,255,255,0.4)' }}>{label} (mm:ss)</label>
                   <input value={val} onChange={e => set(e.target.value)}
+                    onBlur={() => setPreviewKey(0)} // reset preview when times change
                     className="w-full px-3 py-2 rounded-xl text-sm outline-none font-mono"
                     style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }} />
                 </div>
               ))}
             </div>
+            <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Set the times above then click ▶ Play Clip to preview that exact section</p>
+
             <motion.button onClick={save} disabled={saving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="w-full py-3 rounded-xl text-sm font-medium text-white flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #db2777)' }}>
@@ -141,7 +173,7 @@ function AddSongModal({ userId, onAdded, onClose }: { userId: string; onAdded: (
   )
 }
 
-function AddCollectionModal({ userId, onAdded, onClose }: { userId: string; onAdded: () => void; onClose: () => void }) {
+function AddCollectionModal({ userId, onAdded, onClose }: { userId: string; onAdded: (col: DbCollection) => void; onClose: () => void }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [emoji, setEmoji] = useState('🎵')
@@ -153,8 +185,11 @@ function AddCollectionModal({ userId, onAdded, onClose }: { userId: string; onAd
     if (!name.trim()) return
     setSaving(true)
     try {
-      await createCollection({ user_id: userId, name, description, emoji, is_public: isPublic })
-      onAdded(); onClose()
+      const newCol = await createCollection({ user_id: userId, name, description, emoji, is_public: isPublic })
+      onAdded(newCol)  // pass back for optimistic update
+      onClose()
+    } catch (e) {
+      console.error('Failed to create collection:', e)
     } finally { setSaving(false) }
   }
 
@@ -219,8 +254,13 @@ export default function MePageClient() {
   const load = useCallback(async () => {
     if (!user) return
     try {
-      const [s, c] = await Promise.all([getMySongs(user.id), getUserCollections(user.id)])
-      setSongs(s); setCollections(c)
+      // Run both queries in parallel — single round trip each
+      const [s, c] = await Promise.all([
+        getMySongs(user.id),
+        getUserCollections(user.id)
+      ])
+      setSongs(s)
+      setCollections(c)
       setPlayerSongs(s.map(dbSongToSong))
     } catch {
       setDbError(true)
@@ -228,6 +268,22 @@ export default function MePageClient() {
       setLoading(false)
     }
   }, [user, setPlayerSongs])
+
+  // Optimistic song add — instantly updates UI, background sync
+  const handleSongAdded = useCallback((newSong: DbSong) => {
+    setSongs(prev => {
+      const updated = [newSong, ...prev]
+      setPlayerSongs(updated.map(dbSongToSong))
+      return updated
+    })
+    setTimeout(() => load(), 1000)
+  }, [load, setPlayerSongs])
+
+  // Optimistic collection add
+  const handleCollectionAdded = useCallback((newCol: DbCollection) => {
+    setCollections(prev => [newCol, ...prev])
+    setTimeout(() => load(), 1000)
+  }, [load])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -397,8 +453,8 @@ export default function MePageClient() {
         )}
       </div>
 
-      {showAddSong && user && <AddSongModal userId={user.id} onAdded={load} onClose={() => setShowAddSong(false)} />}
-      {showAddCol && user && <AddCollectionModal userId={user.id} onAdded={load} onClose={() => setShowAddCol(false)} />}
+      {showAddSong && user && <AddSongModal userId={user.id} onAdded={handleSongAdded} onClose={() => setShowAddSong(false)} />}
+      {showAddCol && user && <AddCollectionModal userId={user.id} onAdded={handleCollectionAdded} onClose={() => setShowAddCol(false)} />}
     </div>
   )
 }
